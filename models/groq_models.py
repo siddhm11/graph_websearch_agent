@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import time
 from utils.helper_functions import load_config
 from langchain_core.messages.human import HumanMessage
 
@@ -82,6 +83,7 @@ class GroqModel:
         self.model = model
 
     def invoke(self, messages):
+        time.sleep(0.5)   # wait for half a second
 
         system = messages[0]["content"]
         user = messages[1]["content"]
@@ -104,10 +106,27 @@ class GroqModel:
                 data=json.dumps(payload)
                 )
             
-            print("REQUEST RESPONSE", request_response)
-            request_response_json = request_response.json()['choices'][0]['message']['content']
-            response = str(request_response_json)
             
+            print("REQUEST RESPONSE", request_response.status_code)
+            request_response_json = request_response.json()['choices'][0]['message']['content']
+            resp = request_response.json()
+            print("🔍 [DEBUG] Groq response status:", request_response.status_code)
+            print("🔍 [DEBUG] Groq response body:", resp)
+
+            # 1) HTTP status check
+            if request_response.status_code != 200:
+                raise RuntimeError(f"LLM API returned HTTP {request_response.status_code}: {resp}")
+
+            # 2) Ensure choices exist
+            if 'choices' not in resp or not resp['choices']:
+                raise RuntimeError(f"No choices in response: {resp}")
+
+            # 3) Safely extract the assistant’s content
+            content = resp['choices'][0]['message']['content']
+
+            response_formatted = HumanMessage(content=content)
+
+            response = str(request_response_json)            
             response_formatted = HumanMessage(content=response)
 
             return response_formatted
